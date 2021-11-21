@@ -1,8 +1,9 @@
-import torch
-from torch.utils.data import Dataset
+import tensorflow as tf
+from tf.data import Dataset  # probably wrong
 import numpy as np
 
 from utils import get_timestamp
+# done converting except for some unsure parts
 
 
 class SuicidalDataset(Dataset):
@@ -18,21 +19,22 @@ class SuicidalDataset(Dataset):
     def __len__(self):
         return len(self.label)
 
+    # given an item, returns a list of labels, tweet features, temporal tweet features, and the timestamp
     def __getitem__(self, item):
-        labels = torch.tensor(self.label[item])
+        labels = tf.Tensor(self.label[item])
         tweet_features = self.tweet[item]
         if self.current:
             result = self.temporal[item]
             if self.random:
                 np.random.shuffle(result)
-            temporal_tweet_features = torch.tensor(result)
-            timestamp = torch.tensor(get_timestamp(self.timestamp[item]))
+            temporal_tweet_features = tf.Tensor(result)
+            timestamp = tf.Tensor(get_timestamp(self.timestamp[item]))
         else:
             if len(self.temporal[item]) == 1:
-                temporal_tweet_features = torch.zeros((1, 768), dtype=torch.float32)
-                timestamp = torch.zeros((1, 1), dtype=torch.float32)
+                temporal_tweet_features = np.zeros((1, 768), dtype=tf.float32)
+                timestamp = np.zeros((1, 1), dtype=tf.float32)
             else:
-                temporal_tweet_features = torch.tensor(self.temporal[item][1:])
-                timestamp = torch.tensor(get_timestamp(self.timestamp[item][1:]))
+                temporal_tweet_features = tf.Tensor(self.temporal[item][1:])
+                timestamp = tf.Tensor(get_timestamp(self.timestamp[item][1:]))
 
         return [labels, tweet_features, temporal_tweet_features, timestamp]

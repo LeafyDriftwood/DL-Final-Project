@@ -1,17 +1,16 @@
 import datetime
-
 import numpy as np
-import torch
-import torch.nn as nn
-import transformers
+import tensorflow as tf
+import transformers  # prob wrong
 #from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
+# done converting except for some unsure parts
 
 
 def argmax(vec):
     # return the argmax as a python int
-    _, idx = torch.max(vec, 1)
-    return idx.item()
+    idx = tf.math.argmax(vec, axis=1)
+    return idx.item()  # not sure abt this
 
 def pad_collate(batch):
     target = [item[0] for item in batch]
@@ -20,12 +19,12 @@ def pad_collate(batch):
 
     lens = [len(x) for x in data]
 
-    data = nn.utils.rnn.pad_sequence(data, batch_first=True, padding_value=0)
+    data = tf.keras.preprocessing.sequence.pad_sequences(data, value=0)
 
     #     data = torch.tensor(data)
-    target = torch.tensor(target)
-    tweet = torch.tensor(tweet)
-    lens = torch.tensor(lens)
+    target = tf.Tensor(target)
+    tweet = tf.Tensor(tweet)
+    lens = tf.Tensor(lens)
 
     return [target, tweet, data, lens]
 
@@ -38,13 +37,13 @@ def pad_ts_collate(batch):
 
     lens = [len(x) for x in data]
 
-    data = nn.utils.rnn.pad_sequence(data, batch_first=True, padding_value=0)
-    timestamp = nn.utils.rnn.pad_sequence(timestamp, batch_first=True, padding_value=0)
+    data = tf.keras.preprocessing.sequence.pad_sequences(data, value=0)
+    timestamp = tf.keras.preprocessing.sequence.pad_sequences(timestamp, value=0)
 
     #     data = torch.tensor(data)
-    target = torch.tensor(target)
-    tweet = torch.tensor(tweet)
-    lens = torch.tensor(lens)
+    target = tf.Tensor(target)
+    tweet = tf.Tensor(tweet)
+    lens = tf.Tensor(lens)
 
     return [target, tweet, data, lens, timestamp]
 

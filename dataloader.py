@@ -1,5 +1,5 @@
 import tensorflow as tf
-from tf.data import Dataset  # probably wrong
+from tf.data import Dataset  # not sure
 import numpy as np
 
 from utils import get_timestamp

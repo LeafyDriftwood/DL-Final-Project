@@ -10,7 +10,7 @@ from tqdm import tqdm
 def argmax(vec):
     # return the argmax as a python int
     idx = tf.math.argmax(vec, axis=1)
-    return idx.item()  # not sure abt this
+    return idx.item()  # not sure
 
 def pad_collate(batch):
     target = [item[0] for item in batch]

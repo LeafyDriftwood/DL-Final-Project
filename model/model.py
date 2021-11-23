@@ -106,38 +106,40 @@ class HistoricCurrent(nn.Module):
 
         return self.final(x)
 
-# Brandon #######################################################################
-class Historic(nn.Module):
+    
+# finished converting this class
+class Historic(tf.Module):
     def __init__(self, embedding_dim, hidden_dim, num_layers, dropout):
         super().__init__()
         self.historic_model = BiLSTM(embedding_dim, hidden_dim, num_layers, dropout)
-        self.dropout = tf.keras.layers.Dropout(dropout) 
-        self.fc1 = nn.Linear(hidden_dim, 32)
-        self.final = nn.Linear(32, 2)
+        self.dropout = tf.keras.layers.Dropout(dropout)
+        self.fc1 = tf.keras.layer.Dense(32)
+        self.final = tf.keras.layers.Dense(2)
 
-    def forward(self, tweet_features, historic_features, lens, timestamp):
+    def __call__(self, tweet_features, historic_features, lens, timestamp):
         outputs, (h_n, c_n) = self.historic_model(historic_features, lens)
-        hidden = torch.cat((h_n[-2, :, :], h_n[-1, :, :]), dim=1)
-        x = F.relu(self.fc1(hidden))
+        hidden = tf.concat([h_n[-2, :, :], h_n[-1, :, :]], axis=1)
+        x = tf.nn.relu(self.fc1(hidden))
         return self.final(x)
 
 
+# finished converting this class
 class Current(tf.Module):
     def __init__(self, hidden_dim, dropout):
         super().__init__()
         self.fc1 = tf.keras.layers.Dense(hidden_dim)
-        self.dropout = nn.Dropout(dropout)
+        self.dropout = tf.keras.layers.Dropout(dropout)
         self.fc2 = tf.keras.layers.Dense(32)
         self.final = tf.keras.layers.Dense(2)
 
-    def forward(self, tweet_features, historic_features, lens, timestamp):
-        x = F.relu(self.fc1(tweet_features))
+    def __call__(self, tweet_features, historic_features, lens, timestamp):
+        x = tf.nn.relu(self.fc1(tweet_features))
         x = self.dropout(x)
-        x = F.relu(self.fc2(x))
+        x = tf.nn.relu(self.fc2(x))
         return self.final(x)
 
 
-# finished commenting this class except for unsure parts
+# finished converting this class except for unsure parts
 class TimeLSTM(tf.Module):  # not sure
     def __init__(self, input_size, hidden_size, bidirectional=True):
         # assumes that batch_first is always true
@@ -149,7 +151,7 @@ class TimeLSTM(tf.Module):  # not sure
         self.W_d = tf.keras.layers.Dense(hidden_size)
         self.bidirectional = bidirectional
 
-    def forward(self, inputs, timestamps, reverse=False):
+    def __call__(self, inputs, timestamps, reverse=False):
         # inputs: [b, seq, embed]
         # h: [b, hid]
         # c: [b, hid]

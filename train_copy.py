@@ -18,6 +18,10 @@ from model.model import HistoricCurrent, Historic, Current
 from utils import pad_ts_collate
 
 
+# Tensorflow equivalent imports
+import tensorflow as tf
+import tf.nn
+
 def focal_loss(labels, logits, alpha, gamma):
     """Compute the focal loss between `logits` and the ground truth `labels`.
     Focal loss = -alpha_t * (1-pt)^gamma * log(pt)
@@ -33,7 +37,8 @@ def focal_loss(labels, logits, alpha, gamma):
       focal_loss: A float32 scalar representing normalized total loss.
     """
     # 
-    BCLoss = F.binary_cross_entropy_with_logits(input=logits, target=labels, reduction="none")
+    BCLoss_layer = tf.keras.losses.BinaryCrossentropy(from_logits=True, reduction= "None")
+    BCLoss = BCLoss_layer(labels, logits)
 
     if gamma == 0.0:
         modulator = 1.0

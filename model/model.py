@@ -4,30 +4,32 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import tensorflow as tf
 
 
-class BiLSTMAttn(nn.Module):
+class BiLSTMAttn(tf.Module):
     def __init__(self, embedding_dim, hidden_dim, num_layers, dropout):
         super().__init__()
         self.hidden_dim = hidden_dim
         self.n_layers = num_layers
-        self.dropout = nn.Dropout(dropout)
-        self.encoder = nn.LSTM(embedding_dim, hidden_dim // 2, dropout=dropout if num_layers > 1 else 0,
-                               num_layers=num_layers, batch_first=True, bidirectional=True)
+        self.dropout = tf.keras.layers.Dropout(dropout) 
+        self.encoder = tf.keras.layers.LSTM(embedding_dim, hidden_dim // 2, dropout=dropout if num_layers > 1 else 0,
+                               num_layers=num_layers, batch_first=True, bidirectional=True) # not sure about this one
 
     def attnetwork(self, encoder_out, final_hidden):
-        hidden = final_hidden.squeeze(0)
-        attn_weights = torch.bmm(encoder_out, hidden.unsqueeze(2)).squeeze(2)
-        soft_attn_weights = F.softmax(attn_weights, 1)
-        new_hidden = torch.bmm(encoder_out.transpose(1, 2), soft_attn_weights.unsqueeze(2)).squeeze(2)
+        hidden = tf.squeeze(final_hidden, axis=0)
+        # attn_weights = torch.bmm(encoder_out, hidden.unsqueeze(2)).squeeze(2)
+        attn_weights = tf.squeeze(tf.matmul(encoder_out. tf.expand_dims(hidden, 2)), axis=2)
+        soft_attn_weights = tf.nn.softmax(attn_weights, 1)
+        # new_hidden = torch.bmm(encoder_out.transpose(1, 2), soft_attn_weights.unsqueeze(2)).squeeze(2)
+        new_hidden = tf.squeeze(tf.matmul(tf.transpose(encoder_out, perm=[1, 2]), tf.expand_dims(soft_attn_weights, 2)), axis=2)
 
         return new_hidden
 
     def forward(self, features, lens):
-        features = self.dropout(features)
-        packed_embedded = nn.utils.rnn.pack_padded_sequence(features, lens, batch_first=True, enforce_sorted=False)
+        features = self.dropout(features) # not sure
+        packed_embedded = nn.utils.rnn.pack_padded_sequence(features, lens, batch_first=True, enforce_sorted=False) # not sure
         outputs, (hn, cn) = self.encoder(packed_embedded)
-        outputs, output_len = torch.nn.utils.rnn.pad_packed_sequence(outputs, batch_first=True)
+        outputs, output_len = torch.nn.utils.rnn.pad_packed_sequence(outputs, batch_first=True) # not sure
         fbout = outputs[:, :, :self.hidden_dim // 2] + outputs[:, :, self.hidden_dim // 2:]
-        fbhn = (hn[-2, :, :] + hn[-1, :, :]).unsqueeze(0)
+        fbhn = tf.expand_dims(hn[-2, :, :] + hn[-1, :, :], axis=0)
         attn_out = self.attnetwork(fbout, fbhn)
 
         return attn_out  #batch_size, hidden_dim/2
@@ -39,16 +41,16 @@ class BiLSTM(nn.Module):
 
         self.hidden_dim = hidden_dim
         self.n_layers = num_layers
-        self.dropout = nn.Dropout(dropout)
+        self.dropout = tf.keras.layers.Dropout(dropout) 
         self.bilstm = nn.LSTM(embedding_dim, hidden_dim // 2, dropout=dropout, num_layers=num_layers, batch_first=True,
-                              bidirectional=True)
+                              bidirectional=True) #not sure about this
 
     def forward(self, features, lens):
         # print(self.hidden.size())
         features = self.dropout(features)
-        packed_embedded = nn.utils.rnn.pack_padded_sequence(features, lens, batch_first=True, enforce_sorted=False)
+        packed_embedded = nn.utils.rnn.pack_padded_sequence(features, lens, batch_first=True, enforce_sorted=False) #not sure about this
         outputs, hidden_state = self.bilstm(packed_embedded)
-        outputs, output_len = torch.nn.utils.rnn.pad_packed_sequence(outputs, batch_first=True)
+        outputs, output_len = torch.nn.utils.rnn.pad_packed_sequence(outputs, batch_first=True) #not sure about this
 
         return outputs, hidden_state  # outputs: batch, seq, hidden_dim - hidden_state: hn, cn: 2*num_layer, batch_size, hidden_dim/2
 
@@ -64,51 +66,52 @@ class HistoricCurrent(nn.Module):
         elif self.model == "bilstm-attention":
             self.historic_model = BiLSTMAttn(embedding_dim, hidden_dim, num_layers, dropout)
 
-        self.fc_ct = nn.Linear(768, hidden_dim)
-        self.fc_ct_attn = nn.Linear(768, hidden_dim//2)
+        self.fc_ct = tf.keras.layers.Dense(hidden_dim)
+        self.fc_ct_attn = tf.keras.layers.Dense(hidden_dim//2)
 
-        self.fc_concat = nn.Linear(hidden_dim * 2, hidden_dim)
-        self.fc_concat_attn = nn.Linear(hidden_dim, hidden_dim)
+        self.fc_concat = tf.keras.layers.Dense(hidden_dim)
+        self.fc_concat_attn = tf.keras.layers.Dense(hidden_dim)
 
-        self.dropout = nn.Dropout(dropout)
-        self.final = nn.Linear(hidden_dim, 2)
+        self.dropout = tf.keras.layers.Dropout(dropout)
+        self.final = tf.keras.layers.Dense(2)
 
     @staticmethod
     def combine_features(tweet_features, historic_features):
-        return torch.cat((tweet_features, historic_features), 1)
+        return tf.concat([tweet_features, historic_features], 1)
 
     def forward(self, tweet_features, historic_features, lens, timestamp):
         if self.model == "tlstm":
             outputs = self.historic_model(historic_features, timestamp)
-            tweet_features = F.relu(self.fc_ct(tweet_features))
-            outputs = torch.mean(outputs, 1)
+            tweet_features = tf.nn.relu(self.fc_ct(tweet_features))
+            # outputs = torch.mean(outputs, 1)
+            outputs = tf.reduce_mean(outputs, axis=1)
             combined_features = self.combine_features(tweet_features, outputs)
             combined_features = self.dropout(combined_features)
-            x = F.relu(self.fc_concat(combined_features))
+            x = tf.nn.relu(self.fc_concat(combined_features))
         elif self.model == "bilstm":
             outputs, (h_n, c_n) = self.historic_model(historic_features, lens)
-            outputs = torch.mean(outputs, 1)
-            tweet_features = F.relu(self.fc_ct(tweet_features))
+            outputs = tf.reduce_mean(outputs, axis=1)
+            tweet_features = tf.nn.relu(self.fc_ct(tweet_features))
             combined_features = self.combine_features(tweet_features, outputs)
             combined_features = self.dropout(combined_features)
-            x = F.relu(self.fc_concat(combined_features))
+            x = tf.nn.relu(self.fc_concat(combined_features))
         elif self.model == "bilstm-attention":
             outputs = self.historic_model(historic_features, lens)
-            tweet_features = F.relu(self.fc_ct_attn(tweet_features))
+            tweet_features = tf.nn.relu(self.fc_ct_attn(tweet_features))
             combined_features = self.combine_features(tweet_features, outputs)
             combined_features = self.dropout(combined_features)
-            x = F.relu(self.fc_concat_attn(combined_features))
+            x = tf.nn.relu(self.fc_concat_attn(combined_features))
 
         x = self.dropout(x)
 
         return self.final(x)
 
-
+# Brandon #######################################################################
 class Historic(nn.Module):
     def __init__(self, embedding_dim, hidden_dim, num_layers, dropout):
         super().__init__()
         self.historic_model = BiLSTM(embedding_dim, hidden_dim, num_layers, dropout)
-        self.dropout = nn.Dropout(dropout)
+        self.dropout = tf.keras.layers.Dropout(dropout) 
         self.fc1 = nn.Linear(hidden_dim, 32)
         self.final = nn.Linear(32, 2)
 

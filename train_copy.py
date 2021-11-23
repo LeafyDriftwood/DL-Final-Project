@@ -36,21 +36,23 @@ def focal_loss(labels, logits, alpha, gamma):
     Returns:
       focal_loss: A float32 scalar representing normalized total loss.
     """
-    # 
-    BCLoss_layer = tf.keras.losses.BinaryCrossentropy(from_logits=True, reduction= "None")
-    BCLoss = BCLoss_layer(labels, logits)
+    # Calculate binary crossentropy loss
+    #BCLoss_layer = tf.keras.losses.BinaryCrossentropy(from_logits=True, reduction= "None")
+    #BCLoss = BCLoss_layer(labels, logits)
+    BCLoss_layer = tf.keras.losses.binary_crossentropy(labels, logits,from_logits=True)
+
 
     if gamma == 0.0:
         modulator = 1.0
     else:
-        modulator = torch.exp(-gamma * labels * logits - gamma * torch.log(1 + torch.exp(-1.0 * logits)))
+        modulator = tf.math.exp(-gamma * labels * logits - gamma * tf.math.log(1 + tf.math.exp(-1.0 * logits)))
 
     loss = modulator * BCLoss
 
     weighted_loss = alpha * loss
-    focal_loss = torch.sum(weighted_loss)
+    focal_loss = tf.reduce_sum(weighted_loss)
 
-    focal_loss /= torch.sum(labels)
+    focal_loss /= tf.reduce_sum(labels)
     return focal_loss
 
 
@@ -73,14 +75,14 @@ def CB_loss(labels, logits, samples_per_cls, no_of_classes, loss_type, beta, gam
     weights = (1.0 - beta) / np.array(effective_num)
     weights = weights / np.sum(weights) * no_of_classes
 
-    labels_one_hot = F.one_hot(labels, no_of_classes).float()
+    labels_one_hot = tf.cast(tf.one_hot(labels, no_of_classes), tf.float32)
 
-    weights = torch.tensor(weights, dtype=torch.float32).cuda()
-    weights = weights.unsqueeze(0)
-    weights = weights.repeat(labels_one_hot.shape[0], 1) * labels_one_hot
-    weights = weights.sum(1)
-    weights = weights.unsqueeze(1)
-    weights = weights.repeat(1, no_of_classes)
+    weights = tf.Tensor(weights, dtype=tf.float32)
+    weights = tf.expand_dims(weights, 0)
+    weights = tf.repeat(weights, repeats=[labels_one_hot.shape[0], 1]) * labels_one_hot
+    weights = tf.reduce_sum(weights, axis=1)
+    weights = tf.expand_dims(weights, 1)
+    weights = tf.repeat(weights, repeats=[1, no_of_classes])
 
     # Return loss based on which type of loss was passed
 
@@ -89,8 +91,10 @@ def CB_loss(labels, logits, samples_per_cls, no_of_classes, loss_type, beta, gam
         cb_loss = focal_loss(labels_one_hot, logits, weights, gamma)
     
     elif loss_type == "sigmoid":
+        ################________UPDATE THIS________################
         cb_loss = F.binary_cross_entropy_with_logits(input=logits, target=labels_one_hot, weight=weights)
     elif loss_type == "softmax":
+        ################________UPDATE THIS________################
         pred = logits.softmax(dim=1)
         cb_loss = F.binary_cross_entropy(input=pred, target=labels_one_hot, weight=weights)
 
@@ -99,7 +103,7 @@ def CB_loss(labels, logits, samples_per_cls, no_of_classes, loss_type, beta, gam
 
 def train_loop(model, dataloader, optimizer, device, dataset_len):
     # Calls pytorch's train method
-    model.train()
+    #model.train()
 
     running_loss = 0.0
     running_corrects = 0
@@ -110,14 +114,15 @@ def train_loop(model, dataloader, optimizer, device, dataset_len):
         labels, tweet_features, temporal_features, lens, timestamp = inputs
 
         # .to(Device) moves the labels tensor to that device
+        '''
         labels = labels.to(device)
         tweet_features = tweet_features.to(device)
         temporal_features = temporal_features.to(device)
         lens = lens.to(device)
         timestamp = timestamp.to(device)
-
+        '''
         # Explicity set gradients to zero before backprop
-        optimizer.zero_grad()
+        #optimizer.zero_grad()
         # Create model
         output = model(tweet_features, temporal_features, lens, timestamp)
         # Max value of all elements in output

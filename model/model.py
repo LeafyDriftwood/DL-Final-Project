@@ -1,8 +1,7 @@
-from __future__ import absolute_import, division, print_function, unicode_literals
+from __future__ import absolute_import, division, print_function, unicode_literals  # not sure abt this
 
-import torch
-import torch.nn.functional as F
-from torch import nn
+# imports are done
+import tensorflow as tf
 
 
 class BiLSTMAttn(nn.Module):
@@ -120,13 +119,13 @@ class Historic(nn.Module):
         return self.final(x)
 
 
-class Current(nn.Module):
+class Current(tf.Module):
     def __init__(self, hidden_dim, dropout):
         super().__init__()
-        self.fc1 = nn.Linear(768, hidden_dim)
+        self.fc1 = tf.keras.layers.Dense(hidden_dim)
         self.dropout = nn.Dropout(dropout)
-        self.fc2 = nn.Linear(hidden_dim, 32)
-        self.final = nn.Linear(32, 2)
+        self.fc2 = tf.keras.layers.Dense(32)
+        self.final = tf.keras.layers.Dense(2)
 
     def forward(self, tweet_features, historic_features, lens, timestamp):
         x = F.relu(self.fc1(tweet_features))
@@ -135,43 +134,44 @@ class Current(nn.Module):
         return self.final(x)
 
 
-class TimeLSTM(nn.Module):
+# finished commenting this class except for unsure parts
+class TimeLSTM(tf.Module):  # not sure
     def __init__(self, input_size, hidden_size, bidirectional=True):
         # assumes that batch_first is always true
         super().__init__()
         self.hidden_size = hidden_size
         self.input_size = input_size
-        self.W_all = nn.Linear(hidden_size, hidden_size * 4)
-        self.U_all = nn.Linear(input_size, hidden_size * 4)
-        self.W_d = nn.Linear(hidden_size, hidden_size)
+        self.W_all = tf.keras.layers.Dense(hidden_size * 4)
+        self.U_all = tf.keras.layers.Dense(hidden_size * 4)
+        self.W_d = tf.keras.layers.Dense(hidden_size)
         self.bidirectional = bidirectional
 
     def forward(self, inputs, timestamps, reverse=False):
         # inputs: [b, seq, embed]
         # h: [b, hid]
         # c: [b, hid]
-        b, seq, embed = inputs.size()
-        h = torch.zeros(b, self.hidden_size, requires_grad=False)
-        c = torch.zeros(b, self.hidden_size, requires_grad=False)
+        b, seq, embed = tf.size(inputs)  # not sure
+        h = tf.zeros([b, self.hidden_size])
+        c = tf.zeros([b, self.hidden_size])
 
-        h = h.cuda()
-        c = c.cuda()
+        h = h.cuda()  # not sure
+        c = c.cuda()  # not sure
         outputs = []
         for s in range(seq):
-            c_s1 = torch.tanh(self.W_d(c))
-            c_s2 = c_s1 * timestamps[:, s:s + 1].expand_as(c_s1)
+            c_s1 = tf.math.tanh(self.W_d(c))
+            c_s2 = c_s1 * tf.broadcast_to(timestamps[:, s:s + 1], c_s1.shape)  # expands a tensor to the same size as c_s1.shape
             c_l = c - c_s1
             c_adj = c_l + c_s2
             outs = self.W_all(h) + self.U_all(inputs[:, s])
-            f, i, o, c_tmp = torch.chunk(outs, 4, 1)
-            f = torch.sigmoid(f)
-            i = torch.sigmoid(i)
-            o = torch.sigmoid(o)
-            c_tmp = torch.sigmoid(c_tmp)
+            f, i, o, c_tmp = tf.split(outs, 4, axis=1)
+            f = tf.math.sigmoid(f)
+            i = tf.math.sigmoid(i)
+            o = tf.math.sigmoid(o)
+            c_tmp = tf.math.sigmoid(c_tmp)
             c = f * c_adj + i * c_tmp
-            h = o * torch.tanh(c)
-            outputs.append(h)
+            h = o * tf.math.tanh(c)
+            outputs.append(h)  # not sure
         if reverse:
-            outputs.reverse()
-        outputs = torch.stack(outputs, 1)
+            outputs.reverse()  # not sure
+        outputs = tf.stack(outputs, axis=1)  # Concatenates a sequence of tensors along a new dimension.
         return outputs

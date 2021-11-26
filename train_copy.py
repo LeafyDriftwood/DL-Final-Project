@@ -108,7 +108,6 @@ def train_loop(model, dataloader, optimizer, device, dataset_len):
     running_loss = 0.0
     running_corrects = 0
 
-
     for bi, inputs in enumerate(tqdm(dataloader, total=len(dataloader), leave=False)):
         # Extracts relevant portions in train's inputs
         labels, tweet_features, temporal_features, lens, timestamp = inputs
@@ -124,22 +123,25 @@ def train_loop(model, dataloader, optimizer, device, dataset_len):
         # Explicity set gradients to zero before backprop
         #optimizer.zero_grad()
         # Create model
-        output = model(tweet_features, temporal_features, lens, timestamp)
-        # Max value of all elements in output
-        _, preds = torch.max(output, 1)
+        with tf.GradientTape() as tape:
+            output = model(tweet_features, temporal_features, lens, timestamp)
+            # Max value of all elements in output
+        
+            preds = tf.math.argmax(output, 1)
 
-        # Calculate loss
-        loss = loss_fn(output, labels, labels.unique(return_counts=True)[1].tolist())
+
+            # Calculate loss
+            loss = loss_fn(output, labels, labels.unique(return_counts=True)[1].tolist())
         # Calculates derivative of loss with respect to every tensor that can be trained
-        loss.backward()
+        gradients = tape.gradient(loss, model.trainable_variables)
         # Apply changes in gradient
-        optimizer.step()
+        optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
         # Sum loss
         running_loss += loss.item()
 
         # Sum number of correct preds
-        running_corrects += torch.sum(preds == labels.data)
+        running_corrects += tf.reduce_sum(preds == labels.data)
 
     # Compute the epoch loss and accuracy
     epoch_loss = running_loss / len(dataloader)

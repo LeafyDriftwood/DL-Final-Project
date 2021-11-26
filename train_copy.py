@@ -167,28 +167,28 @@ def eval_loop(model, dataloader, device, dataset_len):
         labels, tweet_features, temporal_features, lens, timestamp = inputs
 
         # Again, move tensors to device indicated
+        '''
         labels = labels.to(device)
         tweet_features = tweet_features.to(device)
         temporal_features = temporal_features.to(device)
         lens = lens.to(device)
         timestamp = timestamp.to(device)
-
+        '''
         # Disable gradient calculation when calculating output
-        with torch.no_grad():
-            output = model(tweet_features, temporal_features, lens, timestamp)
+        output = model(tweet_features, temporal_features, lens, timestamp)
 
         # Get max of output (not sure why getting indices in torch.max)
-        _, preds = torch.max(output, 1)
+        preds = tf.math.argmax(output, 1)
 
         # Calculate loss
         loss = loss_fn(output, labels, labels.unique(return_counts=True)[1].tolist())
         # Sum loss and correct preds
         running_loss += loss.item()
-        running_corrects += torch.sum(preds == labels.data)
+        running_corrects += tf.reduce_sum(preds == labels.data)
 
         # Moves the memory back from device to cpu, and converts to numpy
-        fin_targets.append(labels.cpu().detach().numpy())
-        fin_outputs.append(preds.cpu().detach().numpy())
+        #fin_targets.append(labels.cpu().detach().numpy())
+        #fin_outputs.append(preds.cpu().detach().numpy())
 
     # Update loss and accuracy
     epoch_loss = running_loss / len(dataloader)

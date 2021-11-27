@@ -322,7 +322,8 @@ def main(config):
 
     # Save best model
     torch.save(model.state_dict(), os.path.join(DATA_DIR, f'saved_model/best_model_{model_name}.pt'))
-
+    
+    # DONE converting from here down
     _, _, y_pred, y_true = eval_loop(model, val_dataloader, device, len(val_dataset))
 
     # Builds a text report with classification metrics
@@ -350,7 +351,7 @@ def main(config):
 
     # If we've set test = true, run the eval loop on our test data
     if config.test:
-        _, _, y_pred, y_true = eval_loop(model, test_dataloader, device, len(test_dataset))
+        _, _, y_pred, y_true = eval_loop(model, test_dataloader, device, len(test_dataset))  # get rid of device?
 
         # Generate a new report based on test data
         report = classification_report(y_true, y_pred, labels=[0, 1], output_dict=True)
@@ -385,3 +386,5 @@ if __name__ == '__main__':
     config = parser.parse_args()
 
     main(config)
+
+    

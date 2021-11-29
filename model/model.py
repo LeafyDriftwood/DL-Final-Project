@@ -10,8 +10,10 @@ class BiLSTMAttn(tf.Module):
         self.hidden_dim = hidden_dim
         self.n_layers = num_layers
         self.dropout = tf.keras.layers.Dropout(dropout) 
-        self.encoder = tf.keras.layers.LSTM(embedding_dim, hidden_dim // 2, dropout=dropout if num_layers > 1 else 0,
-                               num_layers=num_layers, batch_first=True, bidirectional=True) # not sure about this one
+        # self.encoder = nn.LSTM(embedding_dim, hidden_dim // 2, dropout=dropout if num_layers > 1 else 0,
+        #                        num_layers=num_layers, batch_first=True, bidirectional=True)
+        self.encoder = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(hidden_dim // 2, dropout=dropout if num_layers > 1 else 0, return_sequences=True, time_major=False)) # not sure about this one
+
 
     def attnetwork(self, encoder_out, final_hidden):
         hidden = tf.squeeze(final_hidden, axis=0)
@@ -35,7 +37,7 @@ class BiLSTMAttn(tf.Module):
         return attn_out  #batch_size, hidden_dim/2
 
 
-class BiLSTM(nn.Module):
+class BiLSTM(tf.Module):
     def __init__(self, embedding_dim, hidden_dim, num_layers, dropout):
         super().__init__()
 
@@ -55,7 +57,7 @@ class BiLSTM(nn.Module):
         return outputs, hidden_state  # outputs: batch, seq, hidden_dim - hidden_state: hn, cn: 2*num_layer, batch_size, hidden_dim/2
 
 
-class HistoricCurrent(nn.Module):
+class HistoricCurrent(tf.Module):
     def __init__(self, embedding_dim, hidden_dim, num_layers, dropout, model):
         super().__init__()
         self.model = model

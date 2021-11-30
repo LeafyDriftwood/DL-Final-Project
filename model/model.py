@@ -27,7 +27,8 @@ class BiLSTMAttn(tf.Module):
 
     def forward(self, features, lens):
         features = self.dropout(features) # not sure
-        packed_embedded = nn.utils.rnn.pack_padded_sequence(features, lens, batch_first=True, enforce_sorted=False) # not sure
+        # packed_embedded = nn.utils.rnn.pack_padded_sequence(features, lens, batch_first=True, enforce_sorted=False) # not sure
+        packed_embedded = tf.keras.preprocessing.sequence.pad_sequences(features, maxlen=lens)
         outputs, (hn, cn) = self.encoder(packed_embedded)
         outputs, output_len = torch.nn.utils.rnn.pad_packed_sequence(outputs, batch_first=True) # not sure
         fbout = outputs[:, :, :self.hidden_dim // 2] + outputs[:, :, self.hidden_dim // 2:]
@@ -50,7 +51,8 @@ class BiLSTM(tf.Module):
     def forward(self, features, lens):
         # print(self.hidden.size())
         features = self.dropout(features)
-        packed_embedded = nn.utils.rnn.pack_padded_sequence(features, lens, batch_first=True, enforce_sorted=False) #not sure about this
+        # packed_embedded = nn.utils.rnn.pack_padded_sequence(features, lens, batch_first=True, enforce_sorted=False) #not sure about this
+        packed_embedded = tf.keras.preprocessing.sequence.pad_sequences(features, maxlen=lens)
         outputs, hidden_state = self.bilstm(packed_embedded)
         outputs, output_len = torch.nn.utils.rnn.pad_packed_sequence(outputs, batch_first=True) #not sure about this
 

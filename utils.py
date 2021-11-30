@@ -1,16 +1,15 @@
 import datetime
 import numpy as np
 import tensorflow as tf
-import transformers  # prob wrong
+import transformers
 #from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
-# done converting except for some unsure parts
 
 
 def argmax(vec):
     # return the argmax as a python int
     idx = tf.math.argmax(vec, axis=1)
-    return idx.item()  # not sure
+    return idx
 
 def pad_collate(batch):
     target = [item[0] for item in batch]

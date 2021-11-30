@@ -1,9 +1,8 @@
 import tensorflow as tf
-from tf.data import Dataset  # not sure
+from tf.data import Dataset
 import numpy as np
 
 from utils import get_timestamp
-# done converting except for some unsure parts
 
 
 class SuicidalDataset(Dataset):

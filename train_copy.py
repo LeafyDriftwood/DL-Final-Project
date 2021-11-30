@@ -20,7 +20,7 @@ from utils import pad_ts_collate
 
 # Tensorflow equivalent imports
 import tensorflow as tf
-import tf.nn
+import tf.keras.backend as K
 
 def focal_loss(labels, logits, alpha, gamma):
     """Compute the focal loss between `logits` and the ground truth `labels`.
@@ -39,7 +39,7 @@ def focal_loss(labels, logits, alpha, gamma):
     # Calculate binary crossentropy loss
     #BCLoss_layer = tf.keras.losses.BinaryCrossentropy(from_logits=True, reduction= "None")
     #BCLoss = BCLoss_layer(labels, logits)
-    BCLoss_layer = tf.keras.losses.binary_crossentropy(labels, logits,from_logits=True)
+    BCLoss_layer = tf.keras.losses.binary_crossentropy(labels, logits, from_logits=True)
 
 
     if gamma == 0.0:
@@ -92,11 +92,15 @@ def CB_loss(labels, logits, samples_per_cls, no_of_classes, loss_type, beta, gam
     
     elif loss_type == "sigmoid":
         ################________UPDATE THIS________################
-        cb_loss = F.binary_cross_entropy_with_logits(input=logits, target=labels_one_hot, weight=weights)
+        #cb_loss = F.binary_cross_entropy_with_logits(input=logits, target=labels_one_hot, weight=weights)
+        cb_loss = tf.keras.metrics.binary_crossentropy(labels_one_hot, logits, from_logits =True)
+        cb_loss = K.mean(cb_loss*weights)
     elif loss_type == "softmax":
         ################________UPDATE THIS________################
         pred = logits.softmax(dim=1)
-        cb_loss = F.binary_cross_entropy(input=pred, target=labels_one_hot, weight=weights)
+        #cb_loss = F.binary_cross_entropy(input=pred, target=labels_one_hot, weight=weights)
+        cb_loss = tf.keras.metrics.binary_crossentropy(labels_one_hot, logits)
+        cb_loss = K.mean(cb_loss*weights)
 
     return cb_loss
 
@@ -253,23 +257,32 @@ def main(config):
                                    df_test.hist_dates, CURRENT, RANDOM)
 
     # Creates pytorch dataloader objects
+    '''
     train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=pad_ts_collate)
     val_dataloader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=pad_ts_collate)
     test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, collate_fn=pad_ts_collate)
-
+    '''
+    train_dataloader = tf.data.Dataset(train_dataset)
+    val_dataloader = tf.data.Dataset(val_dataset)
+    test_dataloader = tf.data.Dataset(test_dataset)
     # Set device if cuda is available
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    #device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = 'cpu'
     print(device)
 
     LEARNING_RATE = config.learning_rate
 
     # Shift model to appropriate device
-    model.to(device)
+    #model.to(device)
 
-    optimizer = AdamW(model.parameters(), lr=LEARNING_RATE)
+    #optimizer = AdamW(model.parameters(), lr=LEARNING_RATE)
+    optimizer = tf.keras.optimizers.AdamW(learning_rate = LEARNING_RATE)
+
+    '''
     scheduler = get_cosine_schedule_with_warmup(
         optimizer, num_warmup_steps=5, num_training_steps=EPOCHS
     )
+    '''
 
     # Set name for model based on current time
     model_name = f'{int(datetime.timestamp(datetime.now()))}_{config.base_model}_{config.model}_{config.hidden_dim}_{config.num_layer}_{config.learning_rate}'
@@ -280,7 +293,6 @@ def main(config):
 
     print(model)
     print(optimizer)
-    print(scheduler)
 
     # Loop through all epochs
     for epoch in range(EPOCHS):
@@ -292,8 +304,8 @@ def main(config):
         # Get f1, recall scores
         metric = f1_score(_, __, average="macro")
         recall_1 = recall_score(_, __, average=None)[1]
-        if scheduler is not None:
-            scheduler.step()
+        #if scheduler is not None:
+            #scheduler.step()
 
         # Print updates on current epoch
         print(
@@ -304,12 +316,12 @@ def main(config):
 
         # Save a state dictionary to the disk
         if epoch % 25 == 24:
-            if scheduler is not None:
+            #if scheduler is not None:
                 torch.save({
                     'epoch': epoch,
                     'model_state_dict': model.state_dict(),
                     'optimizer': optimizer.state_dict(),
-                    'scheduler': scheduler.state_dict(),
+                    #'scheduler': scheduler.state_dict(),
                     'best_f1': best_metric
                 }, f'{model_name}_{epoch}.tar')
 
@@ -333,7 +345,7 @@ def main(config):
               'lr': LEARNING_RATE,
               'model': str(model),
               'optimizer': str(optimizer),
-              'scheduler': str(scheduler),
+              #'scheduler': str(scheduler),
               'base-model': config.base_model,
               'model-name': config.model,
               'epochs': EPOCHS,

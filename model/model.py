@@ -12,7 +12,10 @@ class BiLSTMAttn(tf.Module):
         self.dropout = tf.keras.layers.Dropout(dropout) 
         # self.encoder = nn.LSTM(embedding_dim, hidden_dim // 2, dropout=dropout if num_layers > 1 else 0,
         #                        num_layers=num_layers, batch_first=True, bidirectional=True)
-        self.encoder = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(hidden_dim // 2, dropout=dropout if num_layers > 1 else 0, return_sequences=True, time_major=False)) # not sure about this one
+        # self.encoder = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(hidden_dim // 2, dropout=dropout if num_layers > 1 else 0, return_sequences=True, time_major=False)) # not sure about this one
+        lstm_cells = [tf.keras.layers.LSTMCELL(hidden_dim // 2, dropout=dropout if num_layers > 1 else 0) for _ in range (num_layers)]
+        stacked_lstm = tf.keras.layers.StackedRNNCells(lstm_cells)
+        self.encoder = tf.keras.layers.Bidirectional(stacked_lstm) # not sure about this one
 
 
     def attnetwork(self, encoder_out, final_hidden):
@@ -26,7 +29,7 @@ class BiLSTMAttn(tf.Module):
         return new_hidden
 
     def forward(self, features, lens):
-        features = self.dropout(features) # not sure
+        features = self.dropout(features) 
         # packed_embedded = nn.utils.rnn.pack_padded_sequence(features, lens, batch_first=True, enforce_sorted=False) # not sure
         packed_embedded = tf.keras.preprocessing.sequence.pad_sequences(features, maxlen=lens)
         outputs, (hn, cn) = self.encoder(packed_embedded)
@@ -45,8 +48,11 @@ class BiLSTM(tf.Module):
         self.hidden_dim = hidden_dim
         self.n_layers = num_layers
         self.dropout = tf.keras.layers.Dropout(dropout) 
-        self.bilstm = nn.LSTM(embedding_dim, hidden_dim // 2, dropout=dropout, num_layers=num_layers, batch_first=True,
-                              bidirectional=True) #not sure about this
+        # self.bilstm = nn.LSTM(embedding_dim, hidden_dim // 2, dropout=dropout, num_layers=num_layers, batch_first=True,
+        #                       bidirectional=True) #not sure about this
+        lstm_cells = [tf.keras.layers.LSTMCELL(hidden_dim // 2, dropout=dropout) for _ in range(num_layers)]
+        stacked_lstm = tf.keras.layers.StackedRNNCells(lstm_cells)
+        self.bilstm = tf.keras.layers.Bidirectional(stacked_lstm) # not sure about this one
 
     def forward(self, features, lens):
         # print(self.hidden.size())
@@ -162,9 +168,7 @@ class TimeLSTM(tf.Module):  # not sure
         b, seq, embed = tf.size(inputs)  # not sure
         h = tf.zeros([b, self.hidden_size])
         c = tf.zeros([b, self.hidden_size])
-
-        h = h.cuda()  # not sure
-        c = c.cuda()  # not sure
+        
         outputs = []
         for s in range(seq):
             c_s1 = tf.math.tanh(self.W_d(c))

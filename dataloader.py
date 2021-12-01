@@ -1,11 +1,11 @@
 import tensorflow as tf
-from tf.data import Dataset
+from tensorflow.keras.utils import Sequence
 import numpy as np
 
 from utils import get_timestamp
 
 
-class SuicidalDataset(Dataset):
+class SuicidalDataset(Sequence):
     def __init__(self, label, tweet, temporal, timestamp, current=True, random=False):
         super().__init__()
         self.label = label

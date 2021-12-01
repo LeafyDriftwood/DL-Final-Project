@@ -28,12 +28,12 @@ class BiLSTMAttn(tf.Module):
 
         return new_hidden
 
-    def forward(self, features, lens):
+    def forward(self, features):
         features = self.dropout(features) 
         # packed_embedded = nn.utils.rnn.pack_padded_sequence(features, lens, batch_first=True, enforce_sorted=False) # not sure
-        packed_embedded = tf.keras.preprocessing.sequence.pad_sequences(features, maxlen=lens)
-        outputs, (hn, cn) = self.encoder(packed_embedded)
-        outputs, output_len = torch.nn.utils.rnn.pad_packed_sequence(outputs, batch_first=True) # not sure
+        # packed_embedded = tf.keras.preprocessing.sequence.pad_sequences(features, maxlen=lens)
+        outputs, (hn, cn) = self.encoder(features)
+        # outputs, output_len = torch.nn.utils.rnn.pad_packed_sequence(outputs, batch_first=True) # not sure
         fbout = outputs[:, :, :self.hidden_dim // 2] + outputs[:, :, self.hidden_dim // 2:]
         fbhn = tf.expand_dims(hn[-2, :, :] + hn[-1, :, :], axis=0)
         attn_out = self.attnetwork(fbout, fbhn)
@@ -54,12 +54,12 @@ class BiLSTM(tf.Module):
         stacked_lstm = tf.keras.layers.StackedRNNCells(lstm_cells)
         self.bilstm = tf.keras.layers.Bidirectional(stacked_lstm) # not sure about this one
 
-    def forward(self, features, lens):
+    def forward(self, features):
         # print(self.hidden.size())
         features = self.dropout(features)
         # packed_embedded = nn.utils.rnn.pack_padded_sequence(features, lens, batch_first=True, enforce_sorted=False) #not sure about this
         # packed_embedded = tf.keras.preprocessing.sequence.pad_sequences(features, maxlen=lens)
-        outputs, hidden_state = self.bilstm(packed_embedded)
+        outputs, hidden_state = self.bilstm(features)
         # outputs, output_len = torch.nn.utils.rnn.pad_packed_sequence(outputs, batch_first=True) #not sure about this
 
         return outputs, hidden_state  # outputs: batch, seq, hidden_dim - hidden_state: hn, cn: 2*num_layer, batch_size, hidden_dim/2
@@ -89,7 +89,7 @@ class HistoricCurrent(tf.Module):
     def combine_features(tweet_features, historic_features):
         return tf.concat([tweet_features, historic_features], 1)
 
-    def forward(self, tweet_features, historic_features, lens, timestamp):
+    def forward(self, tweet_features, historic_features, timestamp):
         if self.model == "tlstm":
             outputs = self.historic_model(historic_features, timestamp)
             tweet_features = tf.nn.relu(self.fc_ct(tweet_features))
@@ -99,14 +99,14 @@ class HistoricCurrent(tf.Module):
             combined_features = self.dropout(combined_features)
             x = tf.nn.relu(self.fc_concat(combined_features))
         elif self.model == "bilstm":
-            outputs, (h_n, c_n) = self.historic_model(historic_features, lens)
+            outputs, (h_n, c_n) = self.historic_model(historic_features)
             outputs = tf.reduce_mean(outputs, axis=1)
             tweet_features = tf.nn.relu(self.fc_ct(tweet_features))
             combined_features = self.combine_features(tweet_features, outputs)
             combined_features = self.dropout(combined_features)
             x = tf.nn.relu(self.fc_concat(combined_features))
         elif self.model == "bilstm-attention":
-            outputs = self.historic_model(historic_features, lens)
+            outputs = self.historic_model(historic_features)
             tweet_features = tf.nn.relu(self.fc_ct_attn(tweet_features))
             combined_features = self.combine_features(tweet_features, outputs)
             combined_features = self.dropout(combined_features)
@@ -126,8 +126,8 @@ class Historic(tf.Module):
         self.fc1 = tf.keras.layer.Dense(32)
         self.final = tf.keras.layers.Dense(2)
 
-    def __call__(self, tweet_features, historic_features, lens, timestamp):
-        outputs, (h_n, c_n) = self.historic_model(historic_features, lens)
+    def __call__(self, tweet_features, historic_features, timestamp):
+        outputs, (h_n, c_n) = self.historic_model(historic_features)
         hidden = tf.concat([h_n[-2, :, :], h_n[-1, :, :]], axis=1)
         x = tf.nn.relu(self.fc1(hidden))
         return self.final(x)
@@ -142,7 +142,7 @@ class Current(tf.Module):
         self.fc2 = tf.keras.layers.Dense(32)
         self.final = tf.keras.layers.Dense(2)
 
-    def __call__(self, tweet_features, historic_features, lens, timestamp):
+    def __call__(self, tweet_features, historic_features, timestamp):
         x = tf.nn.relu(self.fc1(tweet_features))
         x = self.dropout(x)
         x = tf.nn.relu(self.fc2(x))
@@ -168,7 +168,7 @@ class TimeLSTM(tf.Module):  # not sure
         b, seq, embed = tf.size(inputs)  # not sure
         h = tf.zeros([b, self.hidden_size])
         c = tf.zeros([b, self.hidden_size])
-        
+
         outputs = []
         for s in range(seq):
             c_s1 = tf.math.tanh(self.W_d(c))

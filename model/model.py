@@ -30,10 +30,7 @@ class BiLSTMAttn(tf.Module):
 
     def forward(self, features):
         features = self.dropout(features) 
-        # packed_embedded = nn.utils.rnn.pack_padded_sequence(features, lens, batch_first=True, enforce_sorted=False) # not sure
-        # packed_embedded = tf.keras.preprocessing.sequence.pad_sequences(features, maxlen=lens)
         outputs, (hn, cn) = self.encoder(features)
-        # outputs, output_len = torch.nn.utils.rnn.pad_packed_sequence(outputs, batch_first=True) # not sure
         fbout = outputs[:, :, :self.hidden_dim // 2] + outputs[:, :, self.hidden_dim // 2:]
         fbhn = tf.expand_dims(hn[-2, :, :] + hn[-1, :, :], axis=0)
         attn_out = self.attnetwork(fbout, fbhn)
@@ -57,8 +54,6 @@ class BiLSTM(tf.Module):
     def forward(self, features):
         # print(self.hidden.size())
         features = self.dropout(features)
-        # packed_embedded = nn.utils.rnn.pack_padded_sequence(features, lens, batch_first=True, enforce_sorted=False) #not sure about this
-        # packed_embedded = tf.keras.preprocessing.sequence.pad_sequences(features, maxlen=lens)
         outputs, hidden_state = self.bilstm(features)
         # outputs, output_len = torch.nn.utils.rnn.pad_packed_sequence(outputs, batch_first=True) #not sure about this
 
@@ -165,13 +160,15 @@ class TimeLSTM(tf.Module):  # not sure
         # inputs: [b, seq, embed]
         # h: [b, hid]
         # c: [b, hid]
-        b, seq, embed = tf.size(inputs)  # not sure
+        #b, seq, embed = tf.size(inputs)  # not sure
+        b, seq, embed = tf.shape(inputs)
         h = tf.zeros([b, self.hidden_size])
         c = tf.zeros([b, self.hidden_size])
-
+        
         outputs = []
         for s in range(seq):
             c_s1 = tf.math.tanh(self.W_d(c))
+            timestamps = tf.cast(timestamps, tf.float32)
             c_s2 = c_s1 * tf.broadcast_to(timestamps[:, s:s + 1], c_s1.shape)  # expands a tensor to the same size as c_s1.shape
             c_l = c - c_s1
             c_adj = c_l + c_s2
@@ -188,3 +185,4 @@ class TimeLSTM(tf.Module):  # not sure
             outputs.reverse()  # not sure
         outputs = tf.stack(outputs, axis=1)  # Concatenates a sequence of tensors along a new dimension.
         return outputs
+

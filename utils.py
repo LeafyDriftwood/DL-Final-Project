@@ -11,21 +11,7 @@ def argmax(vec):
     idx = tf.math.argmax(vec, axis=1)
     return idx
 
-def pad_collate(batch):
-    target = [item[0] for item in batch]
-    tweet = [item[1] for item in batch]
-    data = [item[2] for item in batch]
 
-    lens = [len(x) for x in data]
-
-    data = tf.keras.preprocessing.sequence.pad_sequences(data, value=0)
-
-    #     data = torch.tensor(data)
-    target = tf.Tensor(target)
-    tweet = tf.Tensor(tweet)
-    lens = tf.Tensor(lens)
-
-    return [target, tweet, data, lens]
 
 
 def pad_ts_collate(batch):
@@ -33,18 +19,17 @@ def pad_ts_collate(batch):
     tweet = [item[1] for item in batch]
     data = [item[2] for item in batch]
     timestamp = [item[3] for item in batch]
+    print(len(target))
 
-    lens = [len(x) for x in data]
 
     data = tf.keras.preprocessing.sequence.pad_sequences(data, value=0)
     timestamp = tf.keras.preprocessing.sequence.pad_sequences(timestamp, value=0)
 
     #     data = torch.tensor(data)
-    target = tf.Tensor(target)
-    tweet = tf.Tensor(tweet)
-    lens = tf.Tensor(lens)
+    target = tf.constant(target)
+    tweet = tf.constant(tweet)
 
-    return [target, tweet, data, lens, timestamp]
+    return [target, tweet, data, timestamp]
 
 
 def get_timestamp(x):
@@ -54,3 +39,4 @@ def get_timestamp(x):
 
     np.array(timestamp) - timestamp[-1]
     return timestamp
+

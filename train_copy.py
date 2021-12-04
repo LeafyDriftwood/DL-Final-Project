@@ -4,6 +4,7 @@ import json
 import os
 import pickle
 from datetime import datetime
+import random
 
 import numpy as np
 import torch
@@ -20,7 +21,7 @@ from utils import pad_ts_collate
 
 # Tensorflow equivalent imports
 import tensorflow as tf
-import tf.keras.backend as K
+import tensorflow.keras.backend as K
 
 def focal_loss(labels, logits, alpha, gamma):
     """Compute the focal loss between `logits` and the ground truth `labels`.
@@ -37,22 +38,25 @@ def focal_loss(labels, logits, alpha, gamma):
       focal_loss: A float32 scalar representing normalized total loss.
     """
     # Calculate binary crossentropy loss
-    #BCLoss_layer = tf.keras.losses.BinaryCrossentropy(from_logits=True, reduction= "None")
-    #BCLoss = BCLoss_layer(labels, logits)
-    BCLoss_layer = tf.keras.losses.binary_crossentropy(labels, logits, from_logits=True)
-
-
+    BCLoss_layer = tf.keras.losses.BinaryCrossentropy(from_logits=True, reduction= tf.losses.Reduction.NONE)
+    temp_labels = tf.expand_dims(labels, 2)
+    temp_logits = tf.expand_dims(logits, 2)
+    BCLoss = BCLoss_layer(temp_labels, temp_logits)
+    #BCLoss_layer = tf.keras.losses.binary_crossentropy(labels, logits, from_logits=True)
+    
     if gamma == 0.0:
         modulator = 1.0
     else:
         modulator = tf.math.exp(-gamma * labels * logits - gamma * tf.math.log(1 + tf.math.exp(-1.0 * logits)))
 
     loss = modulator * BCLoss
+    #print("LOSS2 : ", loss)
 
     weighted_loss = alpha * loss
     focal_loss = tf.reduce_sum(weighted_loss)
 
     focal_loss /= tf.reduce_sum(labels)
+    #print("LOSS3 : ", focal_loss)
     return focal_loss
 
 
@@ -77,13 +81,16 @@ def CB_loss(labels, logits, samples_per_cls, no_of_classes, loss_type, beta, gam
 
     labels_one_hot = tf.cast(tf.one_hot(labels, no_of_classes), tf.float32)
 
-    weights = tf.Tensor(weights, dtype=tf.float32)
+    weights = tf.constant(weights, dtype=tf.float32)
     weights = tf.expand_dims(weights, 0)
-    weights = tf.repeat(weights, repeats=[labels_one_hot.shape[0], 1]) * labels_one_hot
+    weights = tf.repeat(weights, repeats=labels_one_hot.shape[0], axis=0)
+    weights = tf.repeat(weights, repeats=1, axis=1) * labels_one_hot
     weights = tf.reduce_sum(weights, axis=1)
+    
     weights = tf.expand_dims(weights, 1)
-    weights = tf.repeat(weights, repeats=[1, no_of_classes])
-
+    weights = tf.repeat(weights, repeats=1, axis = 0)
+    weights = tf.repeat(weights, repeats=no_of_classes, axis=1)
+   
     # Return loss based on which type of loss was passed
 
     # Focal attempts to handle class impalances
@@ -108,56 +115,70 @@ def CB_loss(labels, logits, samples_per_cls, no_of_classes, loss_type, beta, gam
 def train_loop(model, dataloader, optimizer, device, dataset_len):
     # Calls pytorch's train method
     #model.train()
-
+    dataset_len = 80
     running_loss = 0.0
     running_corrects = 0
+    
+    new_arr = []
 
-    for bi, inputs in enumerate(tqdm(dataloader, total=len(dataloader), leave=False)):
-        # Extracts relevant portions in train's inputs
-        labels, tweet_features, temporal_features, lens, timestamp = inputs
+    for i in range(80):
+      new_arr.append(dataloader.__getitem__(i))
 
-        # .to(Device) moves the labels tensor to that device
-        '''
-        labels = labels.to(device)
-        tweet_features = tweet_features.to(device)
-        temporal_features = temporal_features.to(device)
-        lens = lens.to(device)
-        timestamp = timestamp.to(device)
-        '''
-        # Explicity set gradients to zero before backprop
-        #optimizer.zero_grad()
-        # Create model
-        with tf.GradientTape() as tape:
-            output = model(tweet_features, temporal_features, lens, timestamp)
-            # Max value of all elements in output
-        
-            preds = tf.math.argmax(output, 1)
+    #random.shuffle(new_arr)
+    
+    #for bi, inputs in enumerate(dataloader):
+    # Extracts relevant portions in train's inputs
+    #labels, tweet_features, temporal_features, timestamp = inputs
+    labels, tweet_features, temporal_features, timestamp = pad_ts_collate(new_arr)
+
+    # .to(Device) moves the labels tensor to that device
+    '''
+    labels = labels.to(device)
+    tweet_features = tweet_features.to(device)
+    temporal_features = temporal_features.to(device)
+    lens = lens.to(device)
+    timestamp = timestamp.to(device)
+    '''
+    # Explicity set gradients to zero before backprop
+    #optimizer.zero_grad()
+
+    print(tweet_features.shape)
+    # Create model
+    with tf.GradientTape() as tape:
+        output = model.forward(tweet_features, temporal_features, timestamp)
+        # Max value of all elements in output
+       
+    
+        preds = tf.math.argmax(output, 1)
+       
 
 
-            # Calculate loss
-            loss = loss_fn(output, labels, labels.unique(return_counts=True)[1].tolist())
-        # Calculates derivative of loss with respect to every tensor that can be trained
-        gradients = tape.gradient(loss, model.trainable_variables)
-        # Apply changes in gradient
-        optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+        unique_counts = [len([x for x in np.asarray(labels) if x == 0]), len([x for x in np.asarray(labels) if x == 1])]
+        # Calculate loss
+        loss = loss_fn(output, labels, unique_counts)
+    # Calculates derivative of loss with respect to every tensor that can be trained
+    gradients = tape.gradient(loss, model.trainable_variables)
+    # Apply changes in gradient
+    optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
-        # Sum loss
-        running_loss += loss.item()
+    # Sum loss
+    running_loss += loss
 
-        # Sum number of correct preds
-        running_corrects += tf.reduce_sum(preds == labels.data)
-
+    preds = tf.cast(preds, tf.float32)
+    labels = tf.cast(labels, tf.float32)
+    # Sum number of correct preds
+    #running_corrects += tf.reduce_sum(preds == labels)
+    running_corrects += np.sum(preds.numpy() == labels.numpy())
     # Compute the epoch loss and accuracy
     epoch_loss = running_loss / len(dataloader)
-    epoch_acc = running_corrects.double() / dataset_len
-
+    epoch_acc = running_corrects/ dataset_len
+    
     return epoch_loss, epoch_acc
 
 
 
 def eval_loop(model, dataloader, device, dataset_len):
-    model.eval()
-
+    dataset_len = 20
     # Initialize vars
     running_loss = 0.0
     running_corrects = 0
@@ -166,37 +187,47 @@ def eval_loop(model, dataloader, device, dataset_len):
     fin_targets = []
     fin_outputs = []
 
+    new_arr = []
+
+    for i in range(80,100):
+      new_arr.append(dataloader.__getitem__(i))
+
+    #random.shuffle(new_arr)
+    
     # Loop through eval data
-    for bi, inputs in enumerate(tqdm(dataloader, total=len(dataloader), leave=False)):
-        labels, tweet_features, temporal_features, lens, timestamp = inputs
+    #for bi, inputs in enumerate(tqdm(dataloader, total=len(dataloader), leave=False)):
+    labels, tweet_features, temporal_features, timestamp = pad_ts_collate(new_arr)
+    
+    # Again, move tensors to device indicated
+    '''
+    labels = labels.to(device)
+    tweet_features = tweet_features.to(device)
+    temporal_features = temporal_features.to(device)
+    lens = lens.to(device)
+    timestamp = timestamp.to(device)
+    '''
+    # Disable gradient calculation when calculating output
+    output = model.forward(tweet_features, temporal_features, timestamp)
 
-        # Again, move tensors to device indicated
-        '''
-        labels = labels.to(device)
-        tweet_features = tweet_features.to(device)
-        temporal_features = temporal_features.to(device)
-        lens = lens.to(device)
-        timestamp = timestamp.to(device)
-        '''
-        # Disable gradient calculation when calculating output
-        output = model(tweet_features, temporal_features, lens, timestamp)
+    # Get max of output (not sure why getting indices in torch.max)
+    preds = tf.math.argmax(output, 1)
 
-        # Get max of output (not sure why getting indices in torch.max)
-        preds = tf.math.argmax(output, 1)
+    unique_counts = [len([x for x in np.asarray(labels) if x == 0]), len([x for x in np.asarray(labels) if x == 1])]
+    # Calculate loss
+    loss = loss_fn(output, labels, unique_counts)
+    # Sum loss and correct preds
+    running_loss += loss
+    preds = tf.cast(preds, tf.float32)
+    labels = tf.cast(labels, tf.float32)
+    running_corrects += np.sum(preds.numpy() == labels.numpy())
 
-        # Calculate loss
-        loss = loss_fn(output, labels, labels.unique(return_counts=True)[1].tolist())
-        # Sum loss and correct preds
-        running_loss += loss.item()
-        running_corrects += tf.reduce_sum(preds == labels.data)
-
-        # Moves the memory back from device to cpu, and converts to numpy
-        #fin_targets.append(labels.cpu().detach().numpy())
-        #fin_outputs.append(preds.cpu().detach().numpy())
-
+    # Moves the memory back from device to cpu, and converts to numpy
+    fin_targets.append(labels.numpy())
+    fin_outputs.append(preds.numpy())
+    print(preds.numpy())
     # Update loss and accuracy
     epoch_loss = running_loss / len(dataloader)
-    epoch_accuracy = running_corrects.double() / dataset_len
+    epoch_accuracy = running_corrects / dataset_len
 
     # Stack each array in fin_outputs and fin_targets in vertical columns
     return epoch_loss, epoch_accuracy, np.hstack(fin_outputs), np.hstack(fin_targets)
@@ -256,19 +287,22 @@ def main(config):
     test_dataset = SuicidalDataset(df_test.label.values, df_test.curr_enc.values, df_test.enc.values,
                                    df_test.hist_dates, CURRENT, RANDOM)
 
+    print("TEST: ",df_test.label.values)
+    print("train: ",df_train.label.values)
     # Creates pytorch dataloader objects
     '''
     train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=pad_ts_collate)
     val_dataloader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=pad_ts_collate)
     test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, collate_fn=pad_ts_collate)
     '''
-    train_dataloader = tf.data.Dataset(train_dataset)
-    val_dataloader = tf.data.Dataset(val_dataset)
-    test_dataloader = tf.data.Dataset(test_dataset)
+    
     # Set device if cuda is available
     #device = 'cuda' if torch.cuda.is_available() else 'cpu'
     device = 'cpu'
     print(device)
+
+    #train_dataloader = tf.data.Dataset.from_tensor_slices(train_dataset)
+
 
     LEARNING_RATE = config.learning_rate
 
@@ -276,7 +310,8 @@ def main(config):
     #model.to(device)
 
     #optimizer = AdamW(model.parameters(), lr=LEARNING_RATE)
-    optimizer = tf.keras.optimizers.AdamW(learning_rate = LEARNING_RATE)
+    #optimizer = tf.keras.optimizers.AdamW(learning_rate = LEARNING_RATE)
+    optimizer = tf.keras.optimizers.Adam(learning_rate = LEARNING_RATE)
 
     '''
     scheduler = get_cosine_schedule_with_warmup(
@@ -287,18 +322,19 @@ def main(config):
     # Set name for model based on current time
     model_name = f'{int(datetime.timestamp(datetime.now()))}_{config.base_model}_{config.model}_{config.hidden_dim}_{config.num_layer}_{config.learning_rate}'
 
+    '''
     best_metric = 0.0
     # New tensor with own memory allocation and history
     best_model_wts = copy.deepcopy(model.state_dict())
 
     print(model)
     print(optimizer)
-
+    '''
     # Loop through all epochs
     for epoch in range(EPOCHS):
         # Gets loss and accuracy from training the function, and then from validation data
-        loss, accuracy = train_loop(model, train_dataloader, optimizer, device, len(train_dataset))
-        eval_loss, eval_accuracy, __, _ = eval_loop(model, val_dataloader, device, len(val_dataset))
+        loss, accuracy = train_loop(model, train_dataset, optimizer, device, len(train_dataset))
+        eval_loss, eval_accuracy, __, _ = eval_loop(model, val_dataset, device, len(val_dataset))
 
 
         # Get f1, recall scores
@@ -310,27 +346,28 @@ def main(config):
         # Print updates on current epoch
         print(
             f'epoch {epoch + 1}:: train: loss: {loss:.4f}, accuracy: {accuracy:.4f} | valid: loss: {eval_loss:.4f}, accuracy: {eval_accuracy:.4f}, f1: {metric:.4f}, recall_1: {recall_1:.4f}')
-        if metric > best_metric:
+        '''if metric > best_metric:
             best_metric = metric
-            best_model_wts = copy.deepcopy(model.state_dict())
+            best_model_wts = copy.deepcopy(model.state_dict())'''
 
         # Save a state dictionary to the disk
         if epoch % 25 == 24:
             #if scheduler is not None:
+            '''
                 torch.save({
                     'epoch': epoch,
                     'model_state_dict': model.state_dict(),
                     'optimizer': optimizer.state_dict(),
                     #'scheduler': scheduler.state_dict(),
                     'best_f1': best_metric
-                }, f'{model_name}_{epoch}.tar')
+                }, f'{model_name}_{epoch}.tar')'''
 
-    print(best_metric.item())
+    '''print(best_metric.item())
     model.load_state_dict(best_model_wts)
 
     # Make a folder for our final model
     if not os.path.exists('saved_model'):
-    	os.mkdir("saved_model")
+      os.mkdir("saved_model")
 
     # Save best model
     torch.save(model.state_dict(), os.path.join(DATA_DIR, f'saved_model/best_model_{model_name}.pt'))
@@ -373,7 +410,13 @@ def main(config):
         # Save info as json file
         with open(os.path.join(DATA_DIR, f'saved_model/TEST_{model_name}.json'), 'w') as f:
             json.dump(result, f)
+    '''
+    if config.test:
+        _, _, y_pred, y_true = eval_loop(model, test_dataset, device, len(test_dataset))
 
+        report = classification_report(y_true, y_pred, labels=[0, 1], output_dict=True)
+        print(report)
+        
 
 if __name__ == '__main__':
     # I believe the combinations of the model_set make up the base_model_set
@@ -383,7 +426,7 @@ if __name__ == '__main__':
     # Potential arguments for parser
     parser = argparse.ArgumentParser(description="Temporal Suicidal Modelling")
     parser.add_argument("-lr", "--learning-rate", default=1e-3, type=float)
-    parser.add_argument("-bs", "--batch-size", default=64, type=int)
+    parser.add_argument("-bs", "--batch-size", default=100, type=int)
     parser.add_argument("-e", "--epochs", default=10, type=int)
     parser.add_argument("-hd", "--hidden-dim", default=100, type=int)
     parser.add_argument("-ed", "--embedding-dim", default=768, type=int)
@@ -399,4 +442,4 @@ if __name__ == '__main__':
 
     main(config)
 
-    
+

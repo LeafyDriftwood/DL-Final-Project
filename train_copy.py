@@ -281,8 +281,7 @@ def main(config):
         # Get f1, recall scores
         metric = f1_score(_, __, average="macro")
         recall_1 = recall_score(_, __, average=None)[1]
-        #if scheduler is not None:
-            #scheduler.step()
+       
 
         # Print updates on current epoch
         print(
@@ -291,17 +290,7 @@ def main(config):
             best_metric = metric
             best_model_wts = copy.deepcopy(model.state_dict())'''
 
-        # Save a state dictionary to the disk
-        if epoch % 25 == 24:
-            #if scheduler is not None:
-            '''
-                torch.save({
-                    'epoch': epoch,
-                    'model_state_dict': model.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    #'scheduler': scheduler.state_dict(),
-                    'best_f1': best_metric
-                }, f'{model_name}_{epoch}.tar')'''
+        
 
    
     if config.test:

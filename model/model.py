@@ -1,6 +1,4 @@
-from __future__ import absolute_import, division, print_function, unicode_literals  # not sure abt this
-
-# imports are done
+from __future__ import absolute_import, division, print_function, unicode_literals 
 import tensorflow as tf
 
 
@@ -10,20 +8,15 @@ class BiLSTMAttn(tf.Module):
         self.hidden_dim = hidden_dim
         self.n_layers = num_layers
         self.dropout = tf.keras.layers.Dropout(dropout) 
-        # self.encoder = nn.LSTM(embedding_dim, hidden_dim // 2, dropout=dropout if num_layers > 1 else 0,
-        #                        num_layers=num_layers, batch_first=True, bidirectional=True)
-        # self.encoder = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(hidden_dim // 2, dropout=dropout if num_layers > 1 else 0, return_sequences=True, time_major=False)) # not sure about this one
         lstm_cells = [tf.keras.layers.LSTMCELL(hidden_dim // 2, dropout=dropout if num_layers > 1 else 0) for _ in range (num_layers)]
         stacked_lstm = tf.keras.layers.StackedRNNCells(lstm_cells)
-        self.encoder = tf.keras.layers.Bidirectional(stacked_lstm) # not sure about this one
+        self.encoder = tf.keras.layers.Bidirectional(stacked_lstm) 
 
 
     def attnetwork(self, encoder_out, final_hidden):
         hidden = tf.squeeze(final_hidden, axis=0)
-        # attn_weights = torch.bmm(encoder_out, hidden.unsqueeze(2)).squeeze(2)
         attn_weights = tf.squeeze(tf.matmul(encoder_out. tf.expand_dims(hidden, 2)), axis=2)
         soft_attn_weights = tf.nn.softmax(attn_weights, 1)
-        # new_hidden = torch.bmm(encoder_out.transpose(1, 2), soft_attn_weights.unsqueeze(2)).squeeze(2)
         new_hidden = tf.squeeze(tf.matmul(tf.transpose(encoder_out, perm=[1, 2]), tf.expand_dims(soft_attn_weights, 2)), axis=2)
 
         return new_hidden
@@ -35,7 +28,7 @@ class BiLSTMAttn(tf.Module):
         fbhn = tf.expand_dims(hn[-2, :, :] + hn[-1, :, :], axis=0)
         attn_out = self.attnetwork(fbout, fbhn)
 
-        return attn_out  #batch_size, hidden_dim/2
+        return attn_out  
 
 
 class BiLSTM(tf.Module):
@@ -45,19 +38,14 @@ class BiLSTM(tf.Module):
         self.hidden_dim = hidden_dim
         self.n_layers = num_layers
         self.dropout = tf.keras.layers.Dropout(dropout) 
-        # self.bilstm = nn.LSTM(embedding_dim, hidden_dim // 2, dropout=dropout, num_layers=num_layers, batch_first=True,
-        #                       bidirectional=True) #not sure about this
         lstm_cells = [tf.keras.layers.LSTMCELL(hidden_dim // 2, dropout=dropout) for _ in range(num_layers)]
         stacked_lstm = tf.keras.layers.StackedRNNCells(lstm_cells)
-        self.bilstm = tf.keras.layers.Bidirectional(stacked_lstm) # not sure about this one
+        self.bilstm = tf.keras.layers.Bidirectional(stacked_lstm) 
 
     def forward(self, features):
-        # print(self.hidden.size())
         features = self.dropout(features)
         outputs, hidden_state = self.bilstm(features)
-        # outputs, output_len = torch.nn.utils.rnn.pad_packed_sequence(outputs, batch_first=True) #not sure about this
-
-        return outputs, hidden_state  # outputs: batch, seq, hidden_dim - hidden_state: hn, cn: 2*num_layer, batch_size, hidden_dim/2
+        return outputs, hidden_state  
 
 
 class HistoricCurrent(tf.Module):
@@ -88,7 +76,6 @@ class HistoricCurrent(tf.Module):
         if self.model == "tlstm":
             outputs = self.historic_model(historic_features, timestamp)
             tweet_features = tf.nn.relu(self.fc_ct(tweet_features))
-            # outputs = torch.mean(outputs, 1)
             outputs = tf.reduce_mean(outputs, axis=1)
             combined_features = self.combine_features(tweet_features, outputs)
             combined_features = self.dropout(combined_features)
@@ -112,7 +99,6 @@ class HistoricCurrent(tf.Module):
         return self.final(x)
 
     
-# finished converting this class
 class Historic(tf.Module):
     def __init__(self, embedding_dim, hidden_dim, num_layers, dropout):
         super().__init__()
@@ -128,7 +114,6 @@ class Historic(tf.Module):
         return self.final(x)
 
 
-# finished converting this class
 class Current(tf.Module):
     def __init__(self, hidden_dim, dropout):
         super().__init__()
@@ -144,10 +129,8 @@ class Current(tf.Module):
         return self.final(x)
 
 
-# finished converting this class except for unsure parts
-class TimeLSTM(tf.Module):  # not sure
+class TimeLSTM(tf.Module): 
     def __init__(self, input_size, hidden_size, bidirectional=True):
-        # assumes that batch_first is always true
         super().__init__()
         self.hidden_size = hidden_size
         self.input_size = input_size
@@ -157,10 +140,6 @@ class TimeLSTM(tf.Module):  # not sure
         self.bidirectional = bidirectional
 
     def __call__(self, inputs, timestamps, reverse=False):
-        # inputs: [b, seq, embed]
-        # h: [b, hid]
-        # c: [b, hid]
-        #b, seq, embed = tf.size(inputs)  # not sure
         b, seq, embed = tf.shape(inputs)
         h = tf.zeros([b, self.hidden_size])
         c = tf.zeros([b, self.hidden_size])
@@ -180,9 +159,9 @@ class TimeLSTM(tf.Module):  # not sure
             c_tmp = tf.math.sigmoid(c_tmp)
             c = f * c_adj + i * c_tmp
             h = o * tf.math.tanh(c)
-            outputs.append(h)  # not sure
+            outputs.append(h)  
         if reverse:
-            outputs.reverse()  # not sure
+            outputs.reverse()  
         outputs = tf.stack(outputs, axis=1)  # Concatenates a sequence of tensors along a new dimension.
         return outputs
 

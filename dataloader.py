@@ -4,7 +4,6 @@ from tensorflow.keras.utils import Sequence
 import numpy as np
 import keras
 
-
 from utils import get_timestamp
 
 
@@ -18,7 +17,8 @@ class SuicidalDataset(Sequence):
         self.timestamp = timestamp
         self.random = random
         self.batch_size = 100
-
+    
+    # returns length of the label
     def __len__(self):
         return len(self.label)
 
@@ -40,7 +40,6 @@ class SuicidalDataset(Sequence):
                 temporal_tweet_features = np.zeros((1, 768), dtype=tf.float32)
                 timestamp = np.zeros((1, 1), dtype=tf.float32)
                 
-
             else:
                 temporal_tweet_features = tf.constant(self.temporal[item][1:])
                 timestamp = tf.constant(get_timestamp(self.timestamp[item][1:]))

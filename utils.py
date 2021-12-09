@@ -2,7 +2,6 @@ import datetime
 import numpy as np
 import tensorflow as tf
 import transformers
-#from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 
 
@@ -10,8 +9,6 @@ def argmax(vec):
     # return the argmax as a python int
     idx = tf.math.argmax(vec, axis=1)
     return idx
-
-
 
 
 def pad_ts_collate(batch):
@@ -25,7 +22,6 @@ def pad_ts_collate(batch):
     data = tf.keras.preprocessing.sequence.pad_sequences(data, value=0)
     timestamp = tf.keras.preprocessing.sequence.pad_sequences(timestamp, value=0)
 
-    #     data = torch.tensor(data)
     target = tf.constant(target)
     tweet = tf.constant(tweet)
 

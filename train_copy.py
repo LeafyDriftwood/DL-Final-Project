@@ -42,7 +42,6 @@ def focal_loss(labels, logits, alpha, gamma):
     temp_labels = tf.expand_dims(labels, 2)
     temp_logits = tf.expand_dims(logits, 2)
     BCLoss = BCLoss_layer(temp_labels, temp_logits)
-    #BCLoss_layer = tf.keras.losses.binary_crossentropy(labels, logits, from_logits=True)
     
     if gamma == 0.0:
         modulator = 1.0
@@ -50,13 +49,11 @@ def focal_loss(labels, logits, alpha, gamma):
         modulator = tf.math.exp(-gamma * labels * logits - gamma * tf.math.log(1 + tf.math.exp(-1.0 * logits)))
 
     loss = modulator * BCLoss
-    #print("LOSS2 : ", loss)
 
     weighted_loss = alpha * loss
     focal_loss = tf.reduce_sum(weighted_loss)
 
     focal_loss /= tf.reduce_sum(labels)
-    #print("LOSS3 : ", focal_loss)
     return focal_loss
 
 
@@ -98,14 +95,10 @@ def CB_loss(labels, logits, samples_per_cls, no_of_classes, loss_type, beta, gam
         cb_loss = focal_loss(labels_one_hot, logits, weights, gamma)
     
     elif loss_type == "sigmoid":
-        ################________UPDATE THIS________################
-        #cb_loss = F.binary_cross_entropy_with_logits(input=logits, target=labels_one_hot, weight=weights)
         cb_loss = tf.keras.metrics.binary_crossentropy(labels_one_hot, logits, from_logits =True)
         cb_loss = K.mean(cb_loss*weights)
     elif loss_type == "softmax":
-        ################________UPDATE THIS________################
         pred = logits.softmax(dim=1)
-        #cb_loss = F.binary_cross_entropy(input=pred, target=labels_one_hot, weight=weights)
         cb_loss = tf.keras.metrics.binary_crossentropy(labels_one_hot, logits)
         cb_loss = K.mean(cb_loss*weights)
 
@@ -113,8 +106,7 @@ def CB_loss(labels, logits, samples_per_cls, no_of_classes, loss_type, beta, gam
 
 
 def train_loop(model, dataloader, optimizer, device, dataset_len):
-    # Calls pytorch's train method
-    #model.train()
+    # Train loop for data
     dataset_len = 80
     running_loss = 0.0
     running_corrects = 0
@@ -123,32 +115,15 @@ def train_loop(model, dataloader, optimizer, device, dataset_len):
 
     for i in range(80):
       new_arr.append(dataloader.__getitem__(i))
-
-    #random.shuffle(new_arr)
     
-    #for bi, inputs in enumerate(dataloader):
     # Extracts relevant portions in train's inputs
-    #labels, tweet_features, temporal_features, timestamp = inputs
     labels, tweet_features, temporal_features, timestamp = pad_ts_collate(new_arr)
 
-    # .to(Device) moves the labels tensor to that device
-    '''
-    labels = labels.to(device)
-    tweet_features = tweet_features.to(device)
-    temporal_features = temporal_features.to(device)
-    lens = lens.to(device)
-    timestamp = timestamp.to(device)
-    '''
-    # Explicity set gradients to zero before backprop
-    #optimizer.zero_grad()
 
-    print(tweet_features.shape)
-    # Create model
     with tf.GradientTape() as tape:
         output = model.forward(tweet_features, temporal_features, timestamp)
         # Max value of all elements in output
-       
-    
+      
         preds = tf.math.argmax(output, 1)
        
 
@@ -167,7 +142,7 @@ def train_loop(model, dataloader, optimizer, device, dataset_len):
     preds = tf.cast(preds, tf.float32)
     labels = tf.cast(labels, tf.float32)
     # Sum number of correct preds
-    #running_corrects += tf.reduce_sum(preds == labels)
+
     running_corrects += np.sum(preds.numpy() == labels.numpy())
     # Compute the epoch loss and accuracy
     epoch_loss = running_loss / len(dataloader)
@@ -192,21 +167,11 @@ def eval_loop(model, dataloader, device, dataset_len):
     for i in range(80,100):
       new_arr.append(dataloader.__getitem__(i))
 
-    #random.shuffle(new_arr)
     
     # Loop through eval data
-    #for bi, inputs in enumerate(tqdm(dataloader, total=len(dataloader), leave=False)):
     labels, tweet_features, temporal_features, timestamp = pad_ts_collate(new_arr)
     
-    # Again, move tensors to device indicated
-    '''
-    labels = labels.to(device)
-    tweet_features = tweet_features.to(device)
-    temporal_features = temporal_features.to(device)
-    lens = lens.to(device)
-    timestamp = timestamp.to(device)
-    '''
-    # Disable gradient calculation when calculating output
+    
     output = model.forward(tweet_features, temporal_features, timestamp)
 
     # Get max of output (not sure why getting indices in torch.max)
@@ -289,47 +254,23 @@ def main(config):
 
     print("TEST: ",df_test.label.values)
     print("train: ",df_train.label.values)
-    # Creates pytorch dataloader objects
-    '''
-    train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=pad_ts_collate)
-    val_dataloader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=pad_ts_collate)
-    test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, collate_fn=pad_ts_collate)
-    '''
+   
     
-    # Set device if cuda is available
-    #device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    # Set device if cpu (ignore cuda) 
     device = 'cpu'
-    print(device)
-
-    #train_dataloader = tf.data.Dataset.from_tensor_slices(train_dataset)
+ 
 
 
     LEARNING_RATE = config.learning_rate
 
-    # Shift model to appropriate device
-    #model.to(device)
 
-    #optimizer = AdamW(model.parameters(), lr=LEARNING_RATE)
-    #optimizer = tf.keras.optimizers.AdamW(learning_rate = LEARNING_RATE)
     optimizer = tf.keras.optimizers.Adam(learning_rate = LEARNING_RATE)
 
-    '''
-    scheduler = get_cosine_schedule_with_warmup(
-        optimizer, num_warmup_steps=5, num_training_steps=EPOCHS
-    )
-    '''
 
     # Set name for model based on current time
     model_name = f'{int(datetime.timestamp(datetime.now()))}_{config.base_model}_{config.model}_{config.hidden_dim}_{config.num_layer}_{config.learning_rate}'
 
-    '''
-    best_metric = 0.0
-    # New tensor with own memory allocation and history
-    best_model_wts = copy.deepcopy(model.state_dict())
-
-    print(model)
-    print(optimizer)
-    '''
+   
     # Loop through all epochs
     for epoch in range(EPOCHS):
         # Gets loss and accuracy from training the function, and then from validation data
@@ -362,55 +303,7 @@ def main(config):
                     'best_f1': best_metric
                 }, f'{model_name}_{epoch}.tar')'''
 
-    '''print(best_metric.item())
-    model.load_state_dict(best_model_wts)
-
-    # Make a folder for our final model
-    if not os.path.exists('saved_model'):
-      os.mkdir("saved_model")
-
-    # Save best model
-    torch.save(model.state_dict(), os.path.join(DATA_DIR, f'saved_model/best_model_{model_name}.pt'))
-    
-    # DONE converting from here down
-    _, _, y_pred, y_true = eval_loop(model, val_dataloader, device, len(val_dataset))
-
-    # Builds a text report with classification metrics
-    report = classification_report(y_true, y_pred, labels=[0, 1], output_dict=True)
-    print(report)
-    result = {'best_f1': best_metric.item(),
-              'lr': LEARNING_RATE,
-              'model': str(model),
-              'optimizer': str(optimizer),
-              #'scheduler': str(scheduler),
-              'base-model': config.base_model,
-              'model-name': config.model,
-              'epochs': EPOCHS,
-              'embedding_dim': EMBEDDING_DIM,
-              'hidden_dim': HIDDEN_DIM,
-              'num_layers': NUM_LAYERS,
-              'dropout': DROPOUT,
-              'current': CURRENT,
-              'val_report': report}
-
-    
-    # Save info as json file
-    with open(os.path.join(DATA_DIR, f'saved_model/VAL_{model_name}.json'), 'w') as f:
-        json.dump(result, f)
-
-    # If we've set test = true, run the eval loop on our test data
-    if config.test:
-        _, _, y_pred, y_true = eval_loop(model, test_dataloader, device, len(test_dataset))  # get rid of device?
-
-        # Generate a new report based on test data
-        report = classification_report(y_true, y_pred, labels=[0, 1], output_dict=True)
-        print(report)
-        result['test_report'] = report
-
-        # Save info as json file
-        with open(os.path.join(DATA_DIR, f'saved_model/TEST_{model_name}.json'), 'w') as f:
-            json.dump(result, f)
-    '''
+   
     if config.test:
         _, _, y_pred, y_true = eval_loop(model, test_dataset, device, len(test_dataset))
 

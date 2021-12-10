@@ -153,7 +153,7 @@ def train_loop(model, dataloader, optimizer, device, dataset_len):
 
 
 def eval_loop(model, dataloader, device, dataset_len):
-    dataset_len = 20
+    dataset_len = 100
     # Initialize vars
     running_loss = 0.0
     running_corrects = 0
@@ -164,7 +164,7 @@ def eval_loop(model, dataloader, device, dataset_len):
 
     new_arr = []
 
-    for i in range(80,100):
+    for i in range(0,100):
       new_arr.append(dataloader.__getitem__(i))
 
     
